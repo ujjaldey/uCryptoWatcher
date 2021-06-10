@@ -1,16 +1,23 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+from messaging.telegrambot import TelegramBot
+from util.config.config import Config
+from util.logger.logger import Logger
 
 
-# Press the green button in the gutter to run the script.
+class Main:
+    def __init__(self):
+        logger = Logger(__file__)
+        self.logger = logger.get_logger()
+
+        config = Config()
+        self.config = config
+
+    def start_app(self):
+        self.logger.info("Starting uCryptoWatcher")
+        telegram_bot = TelegramBot(self.config, self.logger)
+        telegram_bot.add_handlers()
+        telegram_bot.start()
+
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    main = Main()
+    main.start_app()
