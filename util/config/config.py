@@ -16,3 +16,6 @@ class Config:
 
     def get_coinmarketcap_api_keys(self):
         return self.config['COINMARKETCAP_API_KEYS'].split(",")
+
+    def get_base_ccy(self):
+        return self.config['BASE_CCY']

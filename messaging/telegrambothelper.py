@@ -39,8 +39,6 @@ class TelegramBotHelper:
 
         response_msg = '<b>List of available commands:</b>\n\n' \
                        '<b>/status</b>: Shows status\n' \
-                       '<b>/setccy</b>: Sets the base currency\n' \
-                       '<b>/getccy</b>: Shows the base currency\n' \
                        '<b>/getprice</b>: Shows the current price\n' \
                        '<b>/getdetail</b>: Shows the detailed pricedata\n' \
                        '<b>/setalert</b>: Sets an alert\n' \
@@ -51,10 +49,6 @@ class TelegramBotHelper:
 
         keyboard = [
             [InlineKeyboardButton('/status', callback_data='status')],
-            [
-                InlineKeyboardButton('/setccy', callback_data='setccy'),
-                InlineKeyboardButton('/getccy', callback_data='getccy'),
-            ],
             [
                 InlineKeyboardButton('/getprice', callback_data='getprice'),
                 InlineKeyboardButton('/getdetail', callback_data='getdetail'),
@@ -77,7 +71,7 @@ class TelegramBotHelper:
             response_msg = f'❌ No Cryptocurrency provided.\n\nEnter /help for help.'
         else:
             crypto = context.args[0].upper()
-            base_ccy = 'SGD'  # TODO
+            base_ccy = self.config.get_base_ccy()
 
             self.logger.info(f'_get_price is called for {crypto}')
 
@@ -92,6 +86,57 @@ class TelegramBotHelper:
 
                 response_msg = f'{emoji} The current price of <i>{data.name} ({crypto})</i>: ' \
                                f'<b>{data.price:,.4f} {data.convert_ccy}</b>'
+            else:
+                response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
+
+    def _get_detail(self, update, context):
+        if len(context.args) < 1:
+            response_msg = f'❌ No Cryptocurrency provided.\n\nEnter /help for help.'
+        else:
+            crypto = context.args[0].upper()
+            base_ccy = self.config.get_base_ccy()
+
+            self.logger.info(f'_get_detail is called for {crypto}')
+
+            cmc = CoinMarketCap(self.config, self.logger)
+            status, data, error = cmc.get_quotes_latest(crypto, base_ccy)
+
+            if status:
+                if data.percent_change_1h >= 0:
+                    emoji = '🙂'
+                else:
+                    emoji = '😟'
+
+                price = data.price
+                percent_change_1h = data.percent_change_1h
+                price_change_1h = price * percent_change_1h / 100
+                percent_change_24h = data.percent_change_24h
+                price_change_24h = price * percent_change_24h / 100
+                percent_change_7d = data.percent_change_7d
+                price_change_7d = price * percent_change_7d / 100
+                percent_change_30d = data.percent_change_30d
+                price_change_30d = price * percent_change_30d / 100
+                percent_change_60d = data.percent_change_60d
+                price_change_60d = price * percent_change_60d / 100
+                percent_change_90d = data.percent_change_90d
+                price_change_90d = price * percent_change_90d / 100
+
+                response_msg = f'{emoji} The detailed price for <i>{data.name} ({crypto})</i>:\n' \
+                               f'Current Price: <b>{price:,.4f} {data.convert_ccy}</b>\n' \
+                               f'Price Change in 1 hr: <b>{price_change_1h:,.2f} {data.convert_ccy}</b> ' \
+                               f'({percent_change_1h:.2f}%)\n' \
+                               f'Price Change in 24 hr: <b>{price_change_24h:,.2f} {data.convert_ccy}</b> ' \
+                               f'({percent_change_24h:.2f}%)\n' \
+                               f'Price Change in 7 days: <b>{price_change_7d:,.2f} {data.convert_ccy}</b> ' \
+                               f'({percent_change_7d:.2f}%)\n' \
+                               f'Price Change in 30 days: <b>{price_change_30d:,.2f} {data.convert_ccy}</b> ' \
+                               f'({percent_change_30d:.2f}%)\n' \
+                               f'Price Change in 60 days: <b>{price_change_60d:,.2f} {data.convert_ccy}</b> ' \
+                               f'({percent_change_60d:.2f}%)\n' \
+                               f'Price Change in 90 days: <b>{price_change_90d:,.2f} {data.convert_ccy}</b> ' \
+                               f'({percent_change_90d:.2f}%)\n'
             else:
                 response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
 

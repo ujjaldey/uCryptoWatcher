@@ -18,7 +18,7 @@ class TelegramBot(TelegramBotHelper):
         self.dp.add_handler(CommandHandler('help', self._help))
         self.dp.add_handler(CallbackQueryHandler(self._button))
         self.dp.add_handler(CommandHandler('getprice', self._get_price))
-        # self.dp.add_handler(CommandHandler('detail', self._send_detail))
+        self.dp.add_handler(CommandHandler('getdetail', self._get_detail))
         # self.dp.add_handler(CommandHandler('alert', self._send_alert))
 
     def start(self):

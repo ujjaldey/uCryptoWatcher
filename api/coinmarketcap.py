@@ -8,6 +8,7 @@ from model.api.quote import Quote
 
 class CoinMarketCap:
     def __init__(self, config, logger):
+        self.config = config
         self.logger = logger
         self.api_base_url = config.get_coinmarketcap_api_base_url()
         self.api_key = config.get_coinmarketcap_api_keys()[0]  # TODO
@@ -19,10 +20,10 @@ class CoinMarketCap:
         return session
 
     @staticmethod
-    def __get_parameters(symbol):
+    def __get_parameters(base_ccy, symbol):
         return {
             'symbol': symbol,
-            'convert': 'SGD',  # TODO
+            'convert': base_ccy,
             'aux': 'num_market_pairs,cmc_rank,date_added,platform,max_supply,circulating_supply,total_supply,'
                    'market_cap_by_total_supply,volume_24h_reported,volume_7d,volume_7d_reported,'
                    'volume_30d,volume_30d_reported,is_active,is_fiat'
@@ -55,7 +56,7 @@ class CoinMarketCap:
         url = 'quotes/latest'
         headers = self.__get_headers(self.api_key)
         session = self.__get_session(headers)
-        parameters = self.__get_parameters(symbol)
+        parameters = self.__get_parameters(self.config.get_base_ccy(), symbol)
 
         try:
             self.logger.info(f'Calling url {url} for {symbol}')
