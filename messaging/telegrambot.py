@@ -14,7 +14,7 @@ class TelegramBot(TelegramBotHelper):
 
     def add_handlers(self):
         self.dp.add_handler(PrefixHandler('/', 'status', self._status))
-        # self.dp.add_handler(PrefixHandler('/', 'help', self._send_help))
+        self.dp.add_handler(PrefixHandler('/', 'help', self._help))
         # self.dp.add_handler(PrefixHandler('/', 'price', self._send_price))
         # self.dp.add_handler(PrefixHandler('/', 'detail', self._send_detail))
         # self.dp.add_handler(PrefixHandler('/', 'alert', self._send_alert))
