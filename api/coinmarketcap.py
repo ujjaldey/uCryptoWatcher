@@ -8,10 +8,10 @@ from model.api.quote import Quote
 
 class CoinMarketCap:
     def __init__(self, config, logger):
+        self.counter = 0
         self.config = config
         self.logger = logger
         self.api_base_url = config.get_coinmarketcap_api_base_url()
-        self.api_key = config.get_coinmarketcap_api_keys()[0]  # TODO
 
     @staticmethod
     def __get_session(headers):
@@ -54,15 +54,21 @@ class CoinMarketCap:
 
     def get_quotes_latest(self, symbol, base_ccy):
         url = 'quotes/latest'
-        headers = self.__get_headers(self.api_key)
+        api_key = self.config.get_coinmarketcap_api_keys()[self.counter]
+        headers = self.__get_headers(api_key)
         session = self.__get_session(headers)
         parameters = self.__get_parameters(self.config.get_base_ccy(), symbol)
 
         try:
-            self.logger.info(f'Calling url {url} for {symbol}')
+            self.logger.info(f'Calling url {url} with key {self.counter} for {symbol}')
 
             response = session.get(self.api_base_url + url, params=parameters)
             data = json.loads(response.text)
+
+            self.counter = self.counter + 1
+
+            if self.counter >= len(self.config.get_coinmarketcap_api_keys()):
+                self.counter = 0
 
             if 'statusCode' in data and data['statusCode'] == 404:
                 response_code = data['statusCode']

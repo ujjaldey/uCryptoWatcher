@@ -5,6 +5,9 @@ from api.coinmarketcap import CoinMarketCap
 
 
 class TelegramBotHelper:
+    def __init__(self):
+        self.cmc = CoinMarketCap(self.config, self.logger)
+
     @staticmethod
     def _button(update: Update, context: CallbackContext):
         '''Parses the CallbackQuery and updates the message text.'''
@@ -26,6 +29,9 @@ class TelegramBotHelper:
     def _set_config(self, config):
         self.config = config
 
+    def _set_coinmarketcap(self, cmc):
+        self.cmd = cmc
+        
     def _status(self, update, context):
         self.logger.info('_status is called')
 
@@ -75,8 +81,7 @@ class TelegramBotHelper:
 
             self.logger.info(f'_get_price is called for {crypto}')
 
-            cmc = CoinMarketCap(self.config, self.logger)
-            status, data, error = cmc.get_quotes_latest(crypto, base_ccy)
+            status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
 
             if status:
                 if data.percent_change_1h >= 0:
@@ -100,8 +105,7 @@ class TelegramBotHelper:
 
             self.logger.info(f'_get_detail is called for {crypto}')
 
-            cmc = CoinMarketCap(self.config, self.logger)
-            status, data, error = cmc.get_quotes_latest(crypto, base_ccy)
+            status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
 
             if status:
                 if data.percent_change_1h >= 0:
