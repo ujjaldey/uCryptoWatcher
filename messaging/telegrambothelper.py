@@ -31,8 +31,8 @@ class TelegramBotHelper:
 
     def _set_coinmarketcap(self, cmc):
         self.cmd = cmc
-        
-    def _status(self, update, context):
+
+    def _status(self, update: Update, context: CallbackContext):
         self.logger.info('_status is called')
 
         response_msg = '<b><i>@{bot_name}</i></b> is up and running...\n\n' \
@@ -40,9 +40,10 @@ class TelegramBotHelper:
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
-    def _help(self, update, context):
+    def _help(self, update: Update, context: CallbackContext):
         self.logger.info('_help is called')
 
+        print(update.effective_chat.id)
         response_msg = '<b>List of available commands:</b>\n\n' \
                        '<b>/status</b>: Shows status\n' \
                        '<b>/getprice</b>: Shows the current price\n' \
@@ -72,7 +73,7 @@ class TelegramBotHelper:
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg, reply_markup=reply_markup)
 
-    def _get_price(self, update, context):
+    def _get_price(self, update: Update, context: CallbackContext):
         if len(context.args) < 1:
             response_msg = f'❌ No Cryptocurrency provided.\n\nEnter /help for help.'
         else:
@@ -96,7 +97,7 @@ class TelegramBotHelper:
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
-    def _get_detail(self, update, context):
+    def _get_detail(self, update: Update, context: CallbackContext):
         if len(context.args) < 1:
             response_msg = f'❌ No Cryptocurrency provided.\n\nEnter /help for help.'
         else:
@@ -127,7 +128,7 @@ class TelegramBotHelper:
                 percent_change_90d = data.percent_change_90d
                 price_change_90d = price * percent_change_90d / 100
 
-                response_msg = f'{emoji} The detailed price for <i>{data.name} ({crypto})</i>:\n' \
+                response_msg = f'{emoji} The detailed price data for <i>{data.name} ({crypto})</i>:\n' \
                                f'Current Price: <b>{price:,.4f} {data.convert_ccy}</b>\n' \
                                f'Price Change in 1 hr: <b>{price_change_1h:,.2f} {data.convert_ccy}</b> ' \
                                f'({percent_change_1h:.2f}%)\n' \
@@ -145,3 +146,42 @@ class TelegramBotHelper:
                 response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
+
+    def _set_alert(self, update: Update, context: CallbackContext):
+        # crypto = context.args[0].upper()
+        base_ccy = self.config.get_base_ccy()
+        condition = '>'
+        condition_desc = 'greater than'
+        set_price = 35000
+
+        crypto = 'BTC'
+
+        print(update)
+        print(context)
+
+        self.logger.info(f'_get_detail is called for {crypto}')
+
+        status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
+
+        if status:
+            if data.percent_change_1h >= 0:
+                emoji = '🙂'
+            else:
+                emoji = '😟'
+
+            response_msg = f'⏳ Alert set for <i>{data.name} ({crypto})</i> ' \
+                           f'price is <i>{condition_desc}</i> <b>{set_price:,.4f} {base_ccy}</b>.\n\n' \
+                           f'{emoji} The current price of <i>{data.name} ({crypto})</i>: ' \
+                           f'<b>{data.price:,.4f} {data.convert_ccy}</b>'
+        else:
+            response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
+
+        context.job_queue.run_repeating(self._set_alert_callback, interval=5, first=5, context=["hiii", update.message.chat_id])
+
+    def _set_alert_callback(self, context):
+        print('context')
+        print(context)
+        print(context.job.context[0])
+        context.bot.send_message(chat_id=context.job.context[1], text="hiiii")
