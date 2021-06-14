@@ -1,3 +1,4 @@
+from database.sqlitedb import SqliteDb
 from messaging.telegrambot import TelegramBot
 from util.config.config import Config
 from util.logger.logger import Logger
@@ -8,12 +9,12 @@ class Main:
         logger = Logger(__file__)
         self.logger = logger.get_logger()
 
-        config = Config()
-        self.config = config
+        self.config = Config()
+        self.db = SqliteDb(self.config)
 
     def start_app(self):
         self.logger.info("Starting uCryptoWatcher")
-        telegram_bot = TelegramBot(self.config, self.logger)
+        telegram_bot = TelegramBot(self.config, self.logger, self.db)
         telegram_bot.add_handlers()
         telegram_bot.start()
 

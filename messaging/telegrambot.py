@@ -8,9 +8,10 @@ from messaging.telegrambothelper import TelegramBotHelper
 
 
 class TelegramBot(TelegramBotHelper):
-    def __init__(self, config, logger):
+    def __init__(self, config, logger, db):
         self._set_logger(logger)
         self._set_config(config)
+        self._set_db(db)
 
         self.cmc = CoinMarketCap(self.config, self.logger)
         self._set_coinmarketcap(config)

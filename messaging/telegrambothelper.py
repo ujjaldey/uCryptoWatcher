@@ -1,12 +1,18 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from datetime import datetime
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
 from telegram.ext import CallbackContext
 
 from api.coinmarketcap import CoinMarketCap
+from database.alerthelper import AlertHelper
+from model.database.alert import AlertDao
+from model.entity.alert import Alert
 
 
 class TelegramBotHelper:
     def __init__(self):
         self.cmc = CoinMarketCap(self.config, self.logger)
+        # self.alert_dao = AlertDao()
 
     @staticmethod
     def _button(update: Update, context: CallbackContext):
@@ -17,17 +23,67 @@ class TelegramBotHelper:
         if query.data == 'status':
             response_msg = 'Shows the current status of the bot.\n\n' \
                            '<i>Usage:</i>\n' \
-                           '<pre language="python">/status</pre>'
+                           '<pre>/status</pre>'
         else:
             response_msg = 'TODO LATER'
 
         query.edit_message_text(text=response_msg)
+
+    @staticmethod
+    def _validate_set_alert_input(args):
+        if len(args) < 3 or len(args) > 4:
+            response_msg = f'⚠ Invalid arguments.\n\nEnter /help for help.'
+            return False, response_msg, -1
+
+        if args[1] not in ('>', '<', '>=', '<=', '='):
+            condition_output = args[1].replace('<', '&lt;')
+            response_msg = f'⚠ Invalid condition <i>{condition_output}</i>.\n\nEnter /help for help.'
+            return False, response_msg, -1
+
+        try:
+            if float(args[2]) < 0:
+                response_msg = f'⚠ Alert price <i>{args[2]}</i> cannot be negative.' \
+                               '\n\nEnter /help for help.'
+                return False, response_msg, -1
+        except ValueError as e:
+            response_msg = f'⚠ Alert price <i>{args[2]}</i> should be a number.' \
+                           '\n\nEnter /help for help.'
+            return False, response_msg, -1
+
+        # get the optiona 4th arg. should be number and end with x
+        if len(args) == 4:
+            alert_counter_str = args[3]
+
+            if not alert_counter_str.upper().endswith('X'):
+                response_msg = f'⚠ Alert counter <i>{alert_counter_str}</i> should end with \'x\'.' \
+                               '\n\nEnter /help for help.'
+                return False, response_msg, 0
+
+            try:
+                if int(alert_counter_str[:-1]) <= 0:
+                    response_msg = f'⚠ Alert counter <i>{alert_counter_str[:-1]}</i> should be ' \
+                                   'greater than zero.\n\nEnter /help for help.'
+                    return False, response_msg, 0
+            except ValueError as e:
+                response_msg = f'⚠ Alert counter <i>{alert_counter_str[:-1]}</i> should be an integer.' \
+                               '\n\nEnter /help for help.'
+                return False, response_msg, 0
+
+            return True, None, int(alert_counter_str[:-1])
+        else:
+            return True, None, 0
+
+        return True, None, 0
 
     def _set_logger(self, logger):
         self.logger = logger
 
     def _set_config(self, config):
         self.config = config
+
+    def _set_db(self, db):
+        self.db = db
+        self.conn = db.connect()
 
     def _set_coinmarketcap(self, cmc):
         self.cmd = cmc
@@ -148,16 +204,22 @@ class TelegramBotHelper:
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
     def _set_alert(self, update: Update, context: CallbackContext):
-        # crypto = context.args[0].upper()
-        base_ccy = self.config.get_base_ccy()
-        condition = '>'
-        condition_desc = 'greater than'
-        set_price = 35000
+        success, response_msg, max_alert_counter = self._validate_set_alert_input(context.args)
 
-        crypto = 'BTC'
+        if not success:
+            context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
+            return
+
+        crypto = context.args[0].upper()
+        condition = context.args[1]
+        alert_price = float(context.args[2])
+        base_ccy = self.config.get_base_ccy()
+
+        max_alert_counter = int(self.config.get_max_alert_counter()) if max_alert_counter == 0 else max_alert_counter
 
         print(update)
         print(context)
+        print(max_alert_counter)
 
         self.logger.info(f'_get_detail is called for {crypto}')
 
@@ -169,19 +231,44 @@ class TelegramBotHelper:
             else:
                 emoji = '😟'
 
+            if condition == '>':
+                condition_desc = 'greater than'
+            elif condition == '<':
+                condition_desc = 'less than'
+            elif condition == '>=':
+                condition_desc = 'greater than or equals to'
+            elif condition == '<=':
+                condition_desc = 'less than or equals to'
+            elif condition == '=':
+                condition_desc = 'equals to'
+            else:
+                condition_desc = ''
+
             response_msg = f'⏳ Alert set for <i>{data.name} ({crypto})</i> ' \
-                           f'price is <i>{condition_desc}</i> <b>{set_price:,.4f} {base_ccy}</b>.\n\n' \
+                           f'price is <i>{condition_desc}</i> <b>{alert_price:,.4f} {base_ccy}</b>.\n\n' \
                            f'{emoji} The current price of <i>{data.name} ({crypto})</i>: ' \
                            f'<b>{data.price:,.4f} {data.convert_ccy}</b>'
         else:
             response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
 
+        context.job_queue.run_repeating(self._set_alert_callback,
+                                        interval=int(self.config.get_alert_frequency_sec()),
+                                        context=['hiii', update.message.chat_id])
+
+        alert_data = Alert(chat_id=update.message.chat_id, crypto=crypto, condition=condition, alert_price=alert_price,
+                           base_ccy=base_ccy, max_alert_count=5, active='Y', last_alert_at='')
+
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
-        context.job_queue.run_repeating(self._set_alert_callback, interval=5, first=5, context=["hiii", update.message.chat_id])
+        alert_helper = AlertHelper(self.logger)
+        result, error = alert_helper.insert(self.db.connect(), alert_data)
+
+        if not result:
+            response_msg = f'❌ Alert could not be saved.\n\nError: <i>{error}</i>'
+            context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
     def _set_alert_callback(self, context):
         print('context')
         print(context)
         print(context.job.context[0])
-        context.bot.send_message(chat_id=context.job.context[1], text="hiiii")
+        context.bot.send_message(chat_id=context.job.context[1], text='hiiii')

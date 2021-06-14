@@ -48,5 +48,7 @@ Thumbs.db
 *.mov
 *.wmv
 
+log/
 venv/
 .env
+db_file/ucw_db_data.db
