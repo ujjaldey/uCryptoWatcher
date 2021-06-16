@@ -1,18 +1,17 @@
-from datetime import datetime
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
 from api.coinmarketcap import CoinMarketCap
 from database.alerthelper import AlertHelper
-from model.database.alert import AlertDao
 from model.entity.alert import Alert
 
 
 class TelegramBotHelper:
+    ALERT = 'alert'
+    ALERT_CALLBACK = 'alert_callback'
+
     def __init__(self):
         self.cmc = CoinMarketCap(self.config, self.logger)
-        # self.alert_dao = AlertDao()
 
     @staticmethod
     def _button(update: Update, context: CallbackContext):
@@ -74,6 +73,42 @@ class TelegramBotHelper:
             return True, None, 0
 
         return True, None, 0
+
+    def _get_response_msg(self, status, data, error, alert_price, condition, base_ccy, counter, response_type):
+        if status:
+            if data.percent_change_1h >= 0:
+                emoji = '🙂'
+            else:
+                emoji = '😟'
+
+            if condition == '>':
+                condition_desc = 'greater than'
+            elif condition == '<':
+                condition_desc = 'lesser than'
+            elif condition == '>=':
+                condition_desc = 'greater than or equal to'
+            elif condition == '<=':
+                condition_desc = 'lesser than or equal to'
+            elif condition == '=':
+                condition_desc = 'equal to'
+            else:
+                condition_desc = ''
+
+            if response_type == self.ALERT_CALLBACK:
+                tmp_str = str(counter)
+                emoji = '⏳'
+            else:
+                tmp_str = 'set'
+                emoji = '🔔'
+
+            response_msg = f'{emoji} Alert {tmp_str} for <i>{data.name} ({data.symbol})</i> ' \
+                           f'price is <i>{condition_desc}</i> <b>{alert_price:,.4f} {base_ccy}</b>.\n\n' \
+                           f'{emoji} The current price of <i>{data.name} ({data.symbol})</i>: ' \
+                           f'<b>{data.price:,.4f} {data.convert_ccy}</b>'
+        else:
+            response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
+
+        return condition_desc, response_msg
 
     def _set_logger(self, logger):
         self.logger = logger
@@ -214,6 +249,7 @@ class TelegramBotHelper:
         condition = context.args[1]
         alert_price = float(context.args[2])
         base_ccy = self.config.get_base_ccy()
+        counter = 0
 
         max_alert_counter = int(self.config.get_max_alert_counter()) if max_alert_counter == 0 else max_alert_counter
 
@@ -225,50 +261,75 @@ class TelegramBotHelper:
 
         status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
 
-        if status:
-            if data.percent_change_1h >= 0:
-                emoji = '🙂'
-            else:
-                emoji = '😟'
-
-            if condition == '>':
-                condition_desc = 'greater than'
-            elif condition == '<':
-                condition_desc = 'less than'
-            elif condition == '>=':
-                condition_desc = 'greater than or equals to'
-            elif condition == '<=':
-                condition_desc = 'less than or equals to'
-            elif condition == '=':
-                condition_desc = 'equals to'
-            else:
-                condition_desc = ''
-
-            response_msg = f'⏳ Alert set for <i>{data.name} ({crypto})</i> ' \
-                           f'price is <i>{condition_desc}</i> <b>{alert_price:,.4f} {base_ccy}</b>.\n\n' \
-                           f'{emoji} The current price of <i>{data.name} ({crypto})</i>: ' \
-                           f'<b>{data.price:,.4f} {data.convert_ccy}</b>'
-        else:
-            response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
-
-        context.job_queue.run_repeating(self._set_alert_callback,
-                                        interval=int(self.config.get_alert_frequency_sec()),
-                                        context=['hiii', update.message.chat_id])
+        condition_desc, response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, 0,
+                                                              self.ALERT)
 
         alert_data = Alert(chat_id=update.message.chat_id, crypto=crypto, condition=condition, alert_price=alert_price,
-                           base_ccy=base_ccy, max_alert_count=5, active='Y', last_alert_at='')
+                           base_ccy=base_ccy, max_alert_count=max_alert_counter, active='Y', last_alert_at='')
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
         alert_helper = AlertHelper(self.logger)
-        result, error = alert_helper.insert(self.db.connect(), alert_data)
+        result, output = alert_helper.insert(self.db.connect(), alert_data)
+
+        # TODO pass the generated id in callback. else it will update all the rows matching same condition
+
+        print("--", result, output)
+
+        context.job_queue.run_repeating(self._set_alert_callback,
+                                        interval=int(self.config.get_alert_frequency_sec()),
+                                        context=[crypto, condition, alert_price, base_ccy,
+                                                 update.message.chat_id, max_alert_counter, counter, output])
 
         if not result:
-            response_msg = f'❌ Alert could not be saved.\n\nError: <i>{error}</i>'
+            response_msg = f'❌ Alert could not be saved.\n\nError: <i>{output}</i>'
             context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
     def _set_alert_callback(self, context):
-        print('context')
-        print(context)
-        print(context.job.context[0])
-        context.bot.send_message(chat_id=context.job.context[1], text='hiiii')
+        crypto = context.job.context[0]
+        condition = context.job.context[1]
+        alert_price = context.job.context[2]
+        base_ccy = context.job.context[3]
+        chat_id = context.job.context[4]
+        max_alert_counter = context.job.context[5]
+        counter = context.job.context[6]
+        alert_id = context.job.context[7]
+
+        status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
+        print(data.price)
+
+        if condition == '>' and float(data.price) > float(alert_price):
+            show_alert = True
+        elif condition == '<' and float(data.price) < float(alert_price):
+            show_alert = True
+        elif condition == '>=' and float(data.price) >= float(alert_price):
+            show_alert = True
+        elif condition == '<=' and float(data.price) <= float(alert_price):
+            show_alert = True
+        elif condition == '=' and float(data.price) == float(alert_price):
+            show_alert = True
+        else:
+            show_alert = False
+
+        if show_alert:
+            counter += 1
+            condition_desc, response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy,
+                                                                  counter, self.ALERT_CALLBACK)
+
+            context.job.context[6] = counter
+
+            alert_data = Alert(id=alert_id, chat_id=chat_id, crypto=crypto, condition=condition,
+                               alert_price=alert_price, base_ccy=base_ccy, max_alert_count=max_alert_counter,
+                               alert_count=counter, active='Y', last_alert_at='')
+
+            alert_helper = AlertHelper(self.logger)
+            result, error = alert_helper.update_alert_count(self.db.connect(), alert_data, counter)
+
+            if not result:
+                response_msg = f'❌ Alert could not be saved.\n\nError: <i>{error}</i>'
+                context.bot.send_message(chat_id=chat_id, text=response_msg)
+
+            if counter >= max_alert_counter:
+                context.job.schedule_removal()
+
+            context.bot.send_message(chat_id=chat_id, text=response_msg)
