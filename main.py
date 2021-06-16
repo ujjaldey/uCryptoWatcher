@@ -16,6 +16,7 @@ class Main:
         self.logger.info("Starting uCryptoWatcher")
         telegram_bot = TelegramBot(self.config, self.logger, self.db)
         telegram_bot.add_handlers()
+        telegram_bot.reload_active_alerts()
         telegram_bot.start()
 
 

@@ -51,30 +51,30 @@ class TelegramBotHelper:
             return False, response_msg, -1
 
         if len(args) == 4:
-            alert_counter_str = args[3]
+            alert_count_str = args[3]
 
-            if not alert_counter_str.upper().endswith('X'):
-                response_msg = f'⚠ Alert counter <i>{alert_counter_str}</i> should end with \'x\'.' \
+            if not alert_count_str.upper().endswith('X'):
+                response_msg = f'⚠ Alert count <i>{alert_count_str}</i> should end with \'x\'.' \
                                '\n\nEnter /help for help.'
                 return False, response_msg, 0
 
             try:
-                if int(alert_counter_str[:-1]) <= 0:
-                    response_msg = f'⚠ Alert counter <i>{alert_counter_str[:-1]}</i> should be ' \
+                if int(alert_count_str[:-1]) <= 0:
+                    response_msg = f'⚠ Alert count <i>{alert_count_str[:-1]}</i> should be ' \
                                    'greater than zero.\n\nEnter /help for help.'
                     return False, response_msg, 0
             except ValueError as e:
-                response_msg = f'⚠ Alert counter <i>{alert_counter_str[:-1]}</i> should be an integer.' \
+                response_msg = f'⚠ Alert count <i>{alert_count_str[:-1]}</i> should be an integer.' \
                                '\n\nEnter /help for help.'
                 return False, response_msg, 0
 
-            return True, None, int(alert_counter_str[:-1])
+            return True, None, int(alert_count_str[:-1])
         else:
             return True, None, 0
 
         return True, None, 0
 
-    def _get_response_msg(self, status, data, error, alert_price, condition, base_ccy, counter, response_type):
+    def _get_response_msg(self, status, data, error, alert_price, condition, base_ccy, alert_count, response_type):
         if status:
             if data.percent_change_1h >= 0:
                 emoji_up_down = '👍'
@@ -95,7 +95,7 @@ class TelegramBotHelper:
                 condition_desc = ''
 
             if response_type == self.ALERT_CALLBACK:
-                tmp_str = str(counter)
+                tmp_str = str(alert_count)
                 emoji = '⏳'
             else:
                 tmp_str = 'set'
@@ -238,7 +238,7 @@ class TelegramBotHelper:
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
     def _set_alert(self, update: Update, context: CallbackContext):
-        success, response_msg, max_alert_counter = self._validate_set_alert_input(context.args)
+        success, response_msg, max_alert_count = self._validate_set_alert_input(context.args)
 
         if not success:
             context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
@@ -248,9 +248,9 @@ class TelegramBotHelper:
         condition = context.args[1]
         alert_price = float(context.args[2])
         base_ccy = self.config.get_base_ccy()
-        counter = 0
+        alert_count = 0
 
-        max_alert_counter = int(self.config.get_max_alert_counter()) if max_alert_counter == 0 else max_alert_counter
+        max_alert_count = int(self.config.get_max_alert_count()) if max_alert_count == 0 else max_alert_count
 
         self.logger.info(f'_get_detail is called for {crypto}')
 
@@ -259,7 +259,7 @@ class TelegramBotHelper:
         response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, 0, self.ALERT)
 
         alert_data = Alert(chat_id=update.message.chat_id, crypto=crypto, condition=condition, alert_price=alert_price,
-                           base_ccy=base_ccy, max_alert_count=max_alert_counter, active='Y', last_alert_at='')
+                           base_ccy=base_ccy, max_alert_count=max_alert_count, active='Y', last_alert_at='')
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
@@ -269,7 +269,7 @@ class TelegramBotHelper:
         context.job_queue.run_repeating(self._set_alert_callback,
                                         interval=int(self.config.get_alert_frequency_sec()),
                                         context=[crypto, condition, alert_price, base_ccy,
-                                                 update.message.chat_id, max_alert_counter, counter, output])
+                                                 update.message.chat_id, max_alert_count, alert_count, output])
 
         if not result:
             response_msg = f'❌ Alert could not be saved.\n\nError: <i>{output}</i>'
@@ -281,8 +281,8 @@ class TelegramBotHelper:
         alert_price = context.job.context[2]
         base_ccy = context.job.context[3]
         chat_id = context.job.context[4]
-        max_alert_counter = context.job.context[5]
-        counter = context.job.context[6]
+        max_alert_count = context.job.context[5]
+        alert_count = context.job.context[6]
         alert_id = context.job.context[7]
 
         status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
@@ -301,23 +301,23 @@ class TelegramBotHelper:
             show_alert = False
 
         if show_alert:
-            counter += 1
-            response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, counter,
+            alert_count += 1
+            response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, alert_count,
                                                   self.ALERT_CALLBACK)
 
-            context.job.context[6] = counter
+            context.job.context[6] = alert_count
 
             context.bot.send_message(chat_id=chat_id, text=response_msg)
 
             alert_data = Alert(id=alert_id, chat_id=chat_id, crypto=crypto, condition=condition,
-                               alert_price=alert_price, base_ccy=base_ccy, max_alert_count=max_alert_counter,
-                               alert_count=counter, active='Y', last_alert_at='',
+                               alert_price=alert_price, base_ccy=base_ccy, max_alert_count=max_alert_count,
+                               alert_count=alert_count, active='Y', last_alert_at=datetime.now().replace(microsecond=0),
                                updated_at=datetime.now().replace(microsecond=0))
 
             alert_helper = AlertHelper(self.logger)
-            result1, error1 = alert_helper.update_alert_count(self.db.connect(), alert_data, counter)
+            result1, error1 = alert_helper.update_alert_count(self.db.connect(), alert_data, alert_count)
 
-            if counter >= max_alert_counter:
+            if alert_count >= max_alert_count:
                 context.job.schedule_removal()
                 result2, error2 = alert_helper.update_active_flg(self.db.connect(), alert_data, 'N')
             else:

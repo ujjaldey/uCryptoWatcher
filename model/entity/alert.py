@@ -3,8 +3,8 @@ from datetime import datetime
 
 class Alert:
     def __init__(self, chat_id, crypto, condition, alert_price, base_ccy, max_alert_count, active,
-                 last_alert_at, id=0, alert_count=0, created_at=datetime.now().replace(microsecond=0),
-                 updated_at=datetime.now().replace(microsecond=0)):
+                 id=0, alert_count=0, last_alert_at=datetime.now().replace(microsecond=0),
+                 created_at=datetime.now().replace(microsecond=0), updated_at=datetime.now().replace(microsecond=0)):
         self.id = id
         self.chat_id = chat_id
         self.crypto = crypto

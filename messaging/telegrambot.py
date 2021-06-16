@@ -1,9 +1,8 @@
-import datetime
-
 from telegram import ParseMode
-from telegram.ext import Defaults, Updater, CommandHandler, CallbackQueryHandler, PicklePersistence
+from telegram.ext import Defaults, Updater, CommandHandler, CallbackQueryHandler
 
 from api.coinmarketcap import CoinMarketCap
+from database.alerthelper import AlertHelper
 from messaging.telegrambothelper import TelegramBotHelper
 
 
@@ -28,9 +27,17 @@ class TelegramBot(TelegramBotHelper):
         self.dp.add_handler(CommandHandler('getdetail', self._get_detail))
         self.dp.add_handler(CommandHandler('setalert', self._set_alert))
 
-        # self.updater.job_queue.run_once(self._status, when=0)
-        chat_id = 1542846687  # TODO from db
-        # self.updater.job_queue.run_repeating(self._set_alert_callback, interval=5, first=1, context=[123, chat_id])
+    def reload_active_alerts(self):
+        alert_helper = AlertHelper(self.logger)
+        result, output = alert_helper.select(self.db.connect())
+
+        for rec in output:
+            self.logger.info(f'Reloading active alert id {rec.id}')
+
+            self.updater.job_queue.run_repeating(self._set_alert_callback,
+                                                 interval=int(self.config.get_alert_frequency_sec()),
+                                                 context=[rec.crypto, rec.condition, rec.alert_price, rec.base_ccy,
+                                                          rec.chat_id, rec.max_alert_count, rec.alert_count, rec.id])
 
     def start(self):
         self.updater.start_polling()
