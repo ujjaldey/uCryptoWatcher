@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 
@@ -15,7 +17,6 @@ class TelegramBotHelper:
 
     @staticmethod
     def _button(update: Update, context: CallbackContext):
-        '''Parses the CallbackQuery and updates the message text.'''
         query = update.callback_query
         query.answer()
 
@@ -49,7 +50,6 @@ class TelegramBotHelper:
                            '\n\nEnter /help for help.'
             return False, response_msg, -1
 
-        # get the optiona 4th arg. should be number and end with x
         if len(args) == 4:
             alert_counter_str = args[3]
 
@@ -77,9 +77,9 @@ class TelegramBotHelper:
     def _get_response_msg(self, status, data, error, alert_price, condition, base_ccy, counter, response_type):
         if status:
             if data.percent_change_1h >= 0:
-                emoji = '🙂'
+                emoji_up_down = '👍'
             else:
-                emoji = '😟'
+                emoji_up_down = '👎'
 
             if condition == '>':
                 condition_desc = 'greater than'
@@ -101,14 +101,14 @@ class TelegramBotHelper:
                 tmp_str = 'set'
                 emoji = '🔔'
 
-            response_msg = f'{emoji} Alert {tmp_str} for <i>{data.name} ({data.symbol})</i> ' \
+            response_msg = f'{emoji} Alert <i>{tmp_str}</i> for <i>{data.name} ({data.symbol})</i> ' \
                            f'price is <i>{condition_desc}</i> <b>{alert_price:,.4f} {base_ccy}</b>.\n\n' \
-                           f'{emoji} The current price of <i>{data.name} ({data.symbol})</i>: ' \
+                           f'{emoji_up_down} The current price of <i>{data.name} ({data.symbol})</i>: ' \
                            f'<b>{data.price:,.4f} {data.convert_ccy}</b>'
         else:
             response_msg = f'❌ Price could not be fetched.\n\nError: <i>{error.error_message}</i>'
 
-        return condition_desc, response_msg
+        return response_msg
 
     def _set_logger(self, logger):
         self.logger = logger
@@ -134,7 +134,6 @@ class TelegramBotHelper:
     def _help(self, update: Update, context: CallbackContext):
         self.logger.info('_help is called')
 
-        print(update.effective_chat.id)
         response_msg = '<b>List of available commands:</b>\n\n' \
                        '<b>/status</b>: Shows status\n' \
                        '<b>/getprice</b>: Shows the current price\n' \
@@ -253,16 +252,11 @@ class TelegramBotHelper:
 
         max_alert_counter = int(self.config.get_max_alert_counter()) if max_alert_counter == 0 else max_alert_counter
 
-        print(update)
-        print(context)
-        print(max_alert_counter)
-
         self.logger.info(f'_get_detail is called for {crypto}')
 
         status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
 
-        condition_desc, response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, 0,
-                                                              self.ALERT)
+        response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, 0, self.ALERT)
 
         alert_data = Alert(chat_id=update.message.chat_id, crypto=crypto, condition=condition, alert_price=alert_price,
                            base_ccy=base_ccy, max_alert_count=max_alert_counter, active='Y', last_alert_at='')
@@ -271,10 +265,6 @@ class TelegramBotHelper:
 
         alert_helper = AlertHelper(self.logger)
         result, output = alert_helper.insert(self.db.connect(), alert_data)
-
-        # TODO pass the generated id in callback. else it will update all the rows matching same condition
-
-        print("--", result, output)
 
         context.job_queue.run_repeating(self._set_alert_callback,
                                         interval=int(self.config.get_alert_frequency_sec()),
@@ -296,7 +286,6 @@ class TelegramBotHelper:
         alert_id = context.job.context[7]
 
         status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
-        print(data.price)
 
         if condition == '>' and float(data.price) > float(alert_price):
             show_alert = True
@@ -313,23 +302,29 @@ class TelegramBotHelper:
 
         if show_alert:
             counter += 1
-            condition_desc, response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy,
-                                                                  counter, self.ALERT_CALLBACK)
+            response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, counter,
+                                                  self.ALERT_CALLBACK)
 
             context.job.context[6] = counter
 
+            context.bot.send_message(chat_id=chat_id, text=response_msg)
+
             alert_data = Alert(id=alert_id, chat_id=chat_id, crypto=crypto, condition=condition,
                                alert_price=alert_price, base_ccy=base_ccy, max_alert_count=max_alert_counter,
-                               alert_count=counter, active='Y', last_alert_at='')
+                               alert_count=counter, active='Y', last_alert_at='',
+                               updated_at=datetime.now().replace(microsecond=0))
 
             alert_helper = AlertHelper(self.logger)
-            result, error = alert_helper.update_alert_count(self.db.connect(), alert_data, counter)
-
-            if not result:
-                response_msg = f'❌ Alert could not be saved.\n\nError: <i>{error}</i>'
-                context.bot.send_message(chat_id=chat_id, text=response_msg)
+            result1, error1 = alert_helper.update_alert_count(self.db.connect(), alert_data, counter)
 
             if counter >= max_alert_counter:
                 context.job.schedule_removal()
+                result2, error2 = alert_helper.update_active_flg(self.db.connect(), alert_data, 'N')
+            else:
+                result2, error2 = True, None
 
-            context.bot.send_message(chat_id=chat_id, text=response_msg)
+            if not (result1 and result2):
+                error = error1 if error1 else ''
+                error = error + '\n' + (error2 if error2 else '')
+                response_msg = f'❌ Alert could not be updated.\n\nError: <i>{error}</i>'
+                context.bot.send_message(chat_id=chat_id, text=response_msg)

@@ -28,7 +28,6 @@ class TelegramBot(TelegramBotHelper):
         self.dp.add_handler(CommandHandler('getdetail', self._get_detail))
         self.dp.add_handler(CommandHandler('setalert', self._set_alert))
 
-        # print(self.updater.message.chat_id)
         # self.updater.job_queue.run_once(self._status, when=0)
         chat_id = 1542846687  # TODO from db
         # self.updater.job_queue.run_repeating(self._set_alert_callback, interval=5, first=1, context=[123, chat_id])

@@ -33,11 +33,23 @@ class AlertHelper:
             stmt = alert_dao \
                 .update() \
                 .values(alert_count=alert_count, updated_at=alert_data.updated_at) \
-                .where(and_(alert_dao.c.id == alert_data.id,
-                            alert_dao.c.chat_id == alert_data.chat_id,
-                            alert_dao.c.crypto == alert_data.crypto,
-                            alert_dao.c.condition == alert_data.condition,
-                            alert_dao.c.alert_price == alert_data.alert_price))
+                .where(and_(alert_dao.c.id == alert_data.id))
+
+            conn.execute(stmt)
+            return True, None
+        except Exception as e:
+            self.logger.error(f'Failed to insert alert data in db. Error: {str(e)}')
+            return False, str(e)
+
+    def update_active_flg(self, conn, alert_data, active):
+        alert_dao_obj = AlertDao()
+        alert_dao = alert_dao_obj.dao_table()
+
+        try:
+            stmt = alert_dao \
+                .update() \
+                .values(active=active, updated_at=alert_data.updated_at) \
+                .where(and_(alert_dao.c.id == alert_data.id))
 
             conn.execute(stmt)
             return True, None
