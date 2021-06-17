@@ -22,11 +22,13 @@ class TelegramBot(TelegramBotHelper):
     def add_handlers(self):
         self.dp.add_handler(CommandHandler('status', self._status))
         self.dp.add_handler(CommandHandler('help', self._help))
-        self.dp.add_handler(CallbackQueryHandler(self._button))
+        self.dp.add_handler(CallbackQueryHandler(self._button, pattern='^help_.*'))
         self.dp.add_handler(CommandHandler('getprice', self._get_price))
         self.dp.add_handler(CommandHandler('getdetail', self._get_detail))
         self.dp.add_handler(CommandHandler('setalert', self._set_alert))
         self.dp.add_handler(CommandHandler('getalerts', self._get_alerts))
+        self.dp.add_handler(CommandHandler('deletealert', self._delete_alert))
+        self.dp.add_handler(CallbackQueryHandler(self._delete_alert_callback, pattern='^delete_.*'))
         self.dp.add_handler(MessageHandler(Filters.regex(r'^.*$'), self._invalid_command))
 
     def reload_active_alerts(self):

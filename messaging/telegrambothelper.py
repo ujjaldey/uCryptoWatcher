@@ -15,12 +15,31 @@ class TelegramBotHelper:
     def __init__(self):
         self.cmc = CoinMarketCap(self.config, self.logger)
 
+    def _delete_alert_callback(self, update: Update, context: CallbackContext):
+        query = update.callback_query
+        query.answer()
+
+        alert_id = int(query.data.split('_')[1])
+
+        if alert_id <= 0:
+            response_msg = '⚠ No alert selected for delete\n\n'
+        else:
+            alert_helper = AlertHelper(self.logger)
+            result, error = alert_helper.update_active_flg(self.db.connect(), alert_id, 'N')
+
+            if not result:
+                response_msg = f'❌ Alert could not be updated.\n\nError: <i>{error}</i>'
+            else:
+                response_msg = f'🟢 Alert successfully deleted.'
+
+        query.edit_message_text(text=response_msg)
+
     @staticmethod
     def _button(update: Update, context: CallbackContext):
         query = update.callback_query
         query.answer()
 
-        if query.data == 'status':
+        if query.data == 'status--------------':
             response_msg = 'Shows the current status of the bot.\n\n' \
                            '<i>Usage:</i>\n' \
                            '<pre>/status</pre>'
@@ -153,15 +172,15 @@ class TelegramBotHelper:
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
         keyboard = [
-            [InlineKeyboardButton('/status', callback_data='status')],
+            [InlineKeyboardButton('/status', callback_data='help_status')],
             [
-                InlineKeyboardButton('/getprice', callback_data='getprice'),
-                InlineKeyboardButton('/getdetail', callback_data='getdetail'),
+                InlineKeyboardButton('/getprice', callback_data='help_getprice'),
+                InlineKeyboardButton('/getdetail', callback_data='help_getdetail'),
             ],
             [
-                InlineKeyboardButton('/setalert', callback_data='setalert'),
-                InlineKeyboardButton('/getalerts', callback_data='getalerts'),
-                InlineKeyboardButton('/deletealert', callback_data='deletealert'),
+                InlineKeyboardButton('/setalert', callback_data='help_setalert'),
+                InlineKeyboardButton('/getalerts', callback_data='help_getalerts'),
+                InlineKeyboardButton('/deletealert', callback_data='help_deletealert'),
             ],
         ]
 
@@ -329,7 +348,7 @@ class TelegramBotHelper:
 
             if alert_count >= max_alert_count:
                 context.job.schedule_removal()
-                result2, error2 = alert_helper.update_active_flg(self.db.connect(), alert_data, 'N')
+                result2, error2 = alert_helper.update_active_flg(self.db.connect(), alert_id, 'N')
             else:
                 result2, error2 = True, None
 
@@ -356,3 +375,26 @@ class TelegramBotHelper:
                                 f'{rec.max_alert_count}x (pending {rec.max_alert_count - rec.alert_count})\n'
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
+
+    def _delete_alert(self, update: Update, context: CallbackContext):
+        self.logger.info('_delete_alert is called')
+
+        alert_list_buttons = []
+
+        alert_helper = AlertHelper(self.logger)
+        result, output = alert_helper.select(self.db.connect())
+
+        if len(output) == 0:
+            response_msg = '🚫 No active alerts'
+        else:
+            response_msg = 'Select an alert to delete:'
+
+            for rec in output:
+                alert_str = f'{rec.crypto} {rec.condition} {rec.alert_price:,.4f} {rec.base_ccy}' \
+                            f'{rec.max_alert_count}x (pending {rec.max_alert_count - rec.alert_count})\n'
+
+                alert_list_buttons.append([InlineKeyboardButton(alert_str, callback_data=f'delete_{rec.id}')])
+
+        reply_markup = InlineKeyboardMarkup(alert_list_buttons)
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg, reply_markup=reply_markup)
