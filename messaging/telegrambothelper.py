@@ -260,7 +260,7 @@ class TelegramBotHelper:
 
         max_alert_count = int(self.config.get_max_alert_count()) if max_alert_count == 0 else max_alert_count
 
-        self.logger.info(f'_get_detail is called for {crypto}')
+        self.logger.info(f'_set_alert is called for {crypto}')
 
         status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
 
@@ -292,6 +292,8 @@ class TelegramBotHelper:
         max_alert_count = context.job.context[5]
         alert_count = context.job.context[6]
         alert_id = context.job.context[7]
+
+        self.logger.info(f'_set_alert_callback is called for {crypto}')
 
         status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
 
@@ -336,3 +338,21 @@ class TelegramBotHelper:
                 error = error + '\n' + (error2 if error2 else '')
                 response_msg = f'❌ Alert could not be updated.\n\nError: <i>{error}</i>'
                 context.bot.send_message(chat_id=chat_id, text=response_msg)
+
+    def _get_alerts(self, update: Update, context: CallbackContext):
+        self.logger.info(f'_get_alerts is called')
+
+        alert_helper = AlertHelper(self.logger)
+        result, output = alert_helper.select(self.db.connect())
+
+        if len(output) == 0:
+            response_msg = '🚫 No active alerts'
+        else:
+            response_msg = '📃 List of active alerts:\n\n'
+
+            for rec in output:
+                condition_str = rec.condition.replace('<', '&lt;')
+                response_msg += f'{rec.crypto} {condition_str} {rec.alert_price:,.4f} {rec.base_ccy}' \
+                                f'{rec.max_alert_count}x (pending {rec.max_alert_count - rec.alert_count})\n'
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)

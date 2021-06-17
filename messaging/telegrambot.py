@@ -26,6 +26,7 @@ class TelegramBot(TelegramBotHelper):
         self.dp.add_handler(CommandHandler('getprice', self._get_price))
         self.dp.add_handler(CommandHandler('getdetail', self._get_detail))
         self.dp.add_handler(CommandHandler('setalert', self._set_alert))
+        self.dp.add_handler(CommandHandler('getalerts', self._get_alerts))
         self.dp.add_handler(MessageHandler(Filters.regex(r'^.*$'), self._invalid_command))
 
     def reload_active_alerts(self):
