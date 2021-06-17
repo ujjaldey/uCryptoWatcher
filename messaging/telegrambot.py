@@ -1,5 +1,5 @@
 from telegram import ParseMode
-from telegram.ext import Defaults, Updater, CommandHandler, CallbackQueryHandler
+from telegram.ext import Defaults, Updater, CommandHandler, CallbackQueryHandler, RegexHandler, MessageHandler, Filters
 
 from api.coinmarketcap import CoinMarketCap
 from database.alerthelper import AlertHelper
@@ -26,6 +26,7 @@ class TelegramBot(TelegramBotHelper):
         self.dp.add_handler(CommandHandler('getprice', self._get_price))
         self.dp.add_handler(CommandHandler('getdetail', self._get_detail))
         self.dp.add_handler(CommandHandler('setalert', self._set_alert))
+        self.dp.add_handler(MessageHandler(Filters.regex(r'^.*$'), self._invalid_command))
 
     def reload_active_alerts(self):
         alert_helper = AlertHelper(self.logger)

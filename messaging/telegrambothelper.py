@@ -32,22 +32,22 @@ class TelegramBotHelper:
     @staticmethod
     def _validate_set_alert_input(args):
         if len(args) < 3 or len(args) > 4:
-            response_msg = f'⚠ Invalid arguments.\n\nEnter /help for help.'
+            response_msg = f'⚠ Invalid arguments.\n\nTry /help for help.'
             return False, response_msg, -1
 
         if args[1] not in ('>', '<', '>=', '<=', '='):
             condition_output = args[1].replace('<', '&lt;')
-            response_msg = f'⚠ Invalid condition <i>{condition_output}</i>.\n\nEnter /help for help.'
+            response_msg = f'⚠ Invalid condition <i>{condition_output}</i>.\n\nTry /help for help.'
             return False, response_msg, -1
 
         try:
             if float(args[2]) < 0:
                 response_msg = f'⚠ Alert price <i>{args[2]}</i> cannot be negative.' \
-                               '\n\nEnter /help for help.'
+                               '\n\nTry /help for help.'
                 return False, response_msg, -1
         except ValueError as e:
             response_msg = f'⚠ Alert price <i>{args[2]}</i> should be a number.' \
-                           '\n\nEnter /help for help.'
+                           '\n\nTry /help for help.'
             return False, response_msg, -1
 
         if len(args) == 4:
@@ -55,17 +55,17 @@ class TelegramBotHelper:
 
             if not alert_count_str.upper().endswith('X'):
                 response_msg = f'⚠ Alert count <i>{alert_count_str}</i> should end with \'x\'.' \
-                               '\n\nEnter /help for help.'
+                               '\n\nTry /help for help.'
                 return False, response_msg, 0
 
             try:
                 if int(alert_count_str[:-1]) <= 0:
                     response_msg = f'⚠ Alert count <i>{alert_count_str[:-1]}</i> should be ' \
-                                   'greater than zero.\n\nEnter /help for help.'
+                                   'greater than zero.\n\nTry /help for help.'
                     return False, response_msg, 0
             except ValueError as e:
                 response_msg = f'⚠ Alert count <i>{alert_count_str[:-1]}</i> should be an integer.' \
-                               '\n\nEnter /help for help.'
+                               '\n\nTry /help for help.'
                 return False, response_msg, 0
 
             return True, None, int(alert_count_str[:-1])
@@ -123,11 +123,19 @@ class TelegramBotHelper:
     def _set_coinmarketcap(self, cmc):
         self.cmd = cmc
 
+    def _invalid_command(self, update: Update, context: CallbackContext):
+        self.logger.info('_invalid_command is called')
+
+        response_msg = f'⚠ Invalid Command {update.message.text}\n\nTry /help for help' \
+            .format(bot_name=self.config.get_telegram_bot_name())
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
+
     def _status(self, update: Update, context: CallbackContext):
         self.logger.info('_status is called')
 
         response_msg = '<b><i>@{bot_name}</i></b> is up and running...\n\n' \
-                       'Enter /help for help'.format(bot_name=self.config.get_telegram_bot_name())
+                       'Try /help for help'.format(bot_name=self.config.get_telegram_bot_name())
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
@@ -165,7 +173,7 @@ class TelegramBotHelper:
 
     def _get_price(self, update: Update, context: CallbackContext):
         if len(context.args) < 1:
-            response_msg = f'❌ No Cryptocurrency provided.\n\nEnter /help for help.'
+            response_msg = f'❌ No Cryptocurrency provided.\n\nTry /help for help.'
         else:
             crypto = context.args[0].upper()
             base_ccy = self.config.get_base_ccy()
@@ -189,7 +197,7 @@ class TelegramBotHelper:
 
     def _get_detail(self, update: Update, context: CallbackContext):
         if len(context.args) < 1:
-            response_msg = f'❌ No Cryptocurrency provided.\n\nEnter /help for help.'
+            response_msg = f'❌ No Cryptocurrency provided.\n\nTry /help for help.'
         else:
             crypto = context.args[0].upper()
             base_ccy = self.config.get_base_ccy()
