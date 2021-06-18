@@ -34,17 +34,48 @@ class TelegramBotHelper:
 
         query.edit_message_text(text=response_msg)
 
-    @staticmethod
-    def _button(update: Update, context: CallbackContext):
+    def _detailed_help(self, update: Update, context: CallbackContext):
         query = update.callback_query
         query.answer()
 
-        if query.data == 'status--------------':
-            response_msg = 'Shows the current status of the bot.\n\n' \
+        help_topic = query.data.split('_')[1]
+
+        if help_topic == 'status':
+            response_msg = 'ℹ Shows the current status of the bot.\n\n' \
                            '<i>Usage:</i>\n' \
                            '<pre>/status</pre>'
+        elif help_topic == 'getprice':
+            response_msg = 'ℹ Gets the current price of a cryptocurrency.\n\n' \
+                           '<i>Usage:</i>\n' \
+                           '<pre>/getprice CCY\nCCY: Cryptocurrency code</pre>\n\n' \
+                           '<i>Example:</i>\n' \
+                           '<pre>/getprice BTC</pre>'
+        elif help_topic == 'getdetail':
+            response_msg = 'ℹ Gets the detailed price of a cryptocurrency.\n\n' \
+                           '<i>Usage:</i>\n' \
+                           '<pre>/getdetail CCY\nCCY: Cryptocurrency code</pre>\n\n' \
+                           '<i>Example:</i>\n' \
+                           '<pre>/getdetail BTC</pre>'
+        elif help_topic == 'setalert':
+            response_msg = 'ℹ Sets an alert for the Cryptocurrency price matching the given criteria.\n\n' \
+                           '<i>Usage:</i>\n' \
+                           '<pre>/setalert CCY CONDITION PRICE Nx\n' \
+                           'CCY: Cryptocurrency code\n' \
+                           'CONDITION: >, &lt;, >=, &lt;=, =\nPRICE: Alert rice in Base currency\n' \
+                           f'N: Repeat times (default {self.config.get_max_alert_count()})</pre>\n\n' \
+                           '<i>Example:</i>\n' \
+                           '<pre>/setalert BTC > 40000</pre>\n' \
+                           '<pre>/setalert BTC &lt; 35000 3x</pre>\n'
+        elif help_topic == 'getalerts':
+            response_msg = 'ℹ Gets the list of active alerts.\n\n' \
+                           '<i>Usage:</i>\n' \
+                           '<pre>/getalerts</pre>'
+        elif help_topic == 'deletealert':
+            response_msg = 'ℹ Deletes an actie alert.\n\n' \
+                           '<i>Usage:</i>\n' \
+                           '<pre>/deletealert</pre>'
         else:
-            response_msg = 'TODO LATER'
+            response_msg = '❌ Invalid command for help'
 
         query.edit_message_text(text=response_msg)
 
@@ -153,7 +184,7 @@ class TelegramBotHelper:
     def _status(self, update: Update, context: CallbackContext):
         self.logger.info('_status is called')
 
-        response_msg = '<b><i>@{bot_name}</i></b> is up and running...\n\n' \
+        response_msg = 'ℹ <b><i>@{bot_name}</i></b> is up and running\n\n' \
                        'Try /help for help'.format(bot_name=self.config.get_telegram_bot_name())
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
@@ -285,22 +316,24 @@ class TelegramBotHelper:
 
         response_msg = self._get_response_msg(status, data, error, alert_price, condition, base_ccy, 0, self.ALERT)
 
-        alert_data = Alert(chat_id=update.message.chat_id, crypto=crypto, condition=condition, alert_price=alert_price,
-                           base_ccy=base_ccy, max_alert_count=max_alert_count, active='Y', last_alert_at='')
-
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
-        alert_helper = AlertHelper(self.logger)
-        result, output = alert_helper.insert(self.db.connect(), alert_data)
+        if status:
+            alert_data = Alert(chat_id=update.message.chat_id, crypto=crypto, condition=condition,
+                               alert_price=alert_price,
+                               base_ccy=base_ccy, max_alert_count=max_alert_count, active='Y', last_alert_at='')
 
-        context.job_queue.run_repeating(self._set_alert_callback,
-                                        interval=int(self.config.get_alert_frequency_sec()),
-                                        context=[crypto, condition, alert_price, base_ccy,
-                                                 update.message.chat_id, max_alert_count, alert_count, output])
+            alert_helper = AlertHelper(self.logger)
+            result, output = alert_helper.insert(self.db.connect(), alert_data)
 
-        if not result:
-            response_msg = f'❌ Alert could not be saved.\n\nError: <i>{output}</i>'
-            context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
+            context.job_queue.run_repeating(self._set_alert_callback,
+                                            interval=int(self.config.get_alert_frequency_sec()),
+                                            context=[crypto, condition, alert_price, base_ccy,
+                                                     update.message.chat_id, max_alert_count, alert_count, output])
+
+            if not result:
+                response_msg = f'❌ Alert could not be saved.\n\nError: <i>{output}</i>'
+                context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
 
     def _set_alert_callback(self, context):
         crypto = context.job.context[0]

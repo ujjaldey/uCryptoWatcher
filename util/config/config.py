@@ -26,7 +26,7 @@ class Config:
     def get_database_file(self):
         return self.config['DATABASE_FILE']
 
-    def get_max_alert_counter(self):
+    def get_max_alert_count(self):
         return self.config['MAX_ALERT_COUNTER']
 
     def get_alert_frequency_sec(self):

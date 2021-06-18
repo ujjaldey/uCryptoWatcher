@@ -22,7 +22,7 @@ class TelegramBot(TelegramBotHelper):
     def add_handlers(self):
         self.dp.add_handler(CommandHandler('status', self._status))
         self.dp.add_handler(CommandHandler('help', self._help))
-        self.dp.add_handler(CallbackQueryHandler(self._button, pattern='^help_.*'))
+        self.dp.add_handler(CallbackQueryHandler(self._detailed_help, pattern='^help_.*'))
         self.dp.add_handler(CommandHandler('getprice', self._get_price))
         self.dp.add_handler(CommandHandler('getdetail', self._get_detail))
         self.dp.add_handler(CommandHandler('setalert', self._set_alert))
