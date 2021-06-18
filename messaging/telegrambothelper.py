@@ -347,6 +347,13 @@ class TelegramBotHelper:
 
         self.logger.info(f'_set_alert_callback is called for {crypto}')
 
+        alert_helper = AlertHelper(self.logger)
+        success, result = alert_helper.select_one(self.db.connect(), alert_id)
+
+        if result.active == 'N':
+            context.job.schedule_removal()
+            return
+
         status, data, error = self.cmc.get_quotes_latest(crypto, base_ccy)
 
         if condition == '>' and float(data.price) > float(alert_price):
@@ -404,7 +411,7 @@ class TelegramBotHelper:
 
             for rec in output:
                 condition_str = rec.condition.replace('<', '&lt;')
-                response_msg += f'{rec.crypto} {condition_str} {rec.alert_price:,.4f} {rec.base_ccy}' \
+                response_msg += f'{rec.crypto} {condition_str} {rec.alert_price:,.4f} {rec.base_ccy} ' \
                                 f'{rec.max_alert_count}x (pending {rec.max_alert_count - rec.alert_count})\n'
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=response_msg)
